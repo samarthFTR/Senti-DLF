@@ -1,0 +1,44 @@
+2026-05-06 20:34:27 | INFO     | __main__ | Running preprocessing pipeline as __main__
+2026-05-06 20:34:27 | INFO     | __main__ | ============================================================
+2026-05-06 20:34:27 | INFO     | __main__ | Senti-DLF  ·  Preprocessing Pipeline  ·  START
+2026-05-06 20:34:27 | INFO     | __main__ | ============================================================
+2026-05-06 20:34:27 | INFO     | __main__ | Loading training CSV  : D:\Senti-DLF\model\data\raw\twitter_training.csv
+2026-05-06 20:34:27 | INFO     | __main__ |   → 74682 rows loaded
+2026-05-06 20:34:27 | INFO     | __main__ | Loading validation CSV: D:\Senti-DLF\model\data\raw\twitter_validation.csv
+2026-05-06 20:34:27 | INFO     | __main__ |   → 1000 rows loaded
+2026-05-06 20:34:27 | INFO     | __main__ | Combined pool         : 75682 rows total
+2026-05-06 20:34:27 | INFO     | __main__ | --- Step: Label normalisation ---
+2026-05-06 20:34:28 | INFO     | __main__ | Dropped 13162 'Irrelevant' rows  (17.4% of pool)
+2026-05-06 20:34:28 | INFO     | __main__ | Remaining after label filter: 62520 rows
+2026-05-06 20:34:28 | INFO     | __main__ | Label distribution:
+2026-05-06 20:34:28 | INFO     | __main__ |   negative   : 22808  (36.5%)
+2026-05-06 20:34:28 | INFO     | __main__ |   positive   : 21109  (33.8%)
+2026-05-06 20:34:28 | INFO     | __main__ |   neutral    : 18603  (29.8%)
+2026-05-06 20:34:28 | INFO     | __main__ | --- Step: Text cleaning ---
+2026-05-06 20:34:28 | WARNING  | __main__ | Dropping 571 rows with null text
+2026-05-06 20:34:28 | INFO     | __main__ | Cleaning 61949 texts…
+2026-05-06 20:34:28 | INFO     | __main__ |   Cleaned 10000 / 61949 rows…
+2026-05-06 20:34:28 | INFO     | __main__ |   Cleaned 20000 / 61949 rows…
+2026-05-06 20:34:28 | INFO     | __main__ |   Cleaned 30000 / 61949 rows…
+2026-05-06 20:34:28 | INFO     | __main__ |   Cleaned 40000 / 61949 rows…
+2026-05-06 20:34:28 | INFO     | __main__ |   Cleaned 50000 / 61949 rows…
+2026-05-06 20:34:28 | INFO     | __main__ |   Cleaned 60000 / 61949 rows…
+2026-05-06 20:34:28 | INFO     | __main__ | Text cleaning complete.
+2026-05-06 20:34:28 | INFO     | __main__ | --- Step: Length filtering (min=3, max=512 chars) ---
+2026-05-06 20:34:28 | INFO     | __main__ | Dropped 866 too-short rows (< 3 chars)
+2026-05-06 20:34:28 | INFO     | __main__ | Dropped 8 too-long  rows (> 512 chars)
+2026-05-06 20:34:28 | INFO     | __main__ | Remaining: 61075 rows  (dropped 1.4% total)
+2026-05-06 20:34:28 | INFO     | __main__ | Text length stats → min=3 | median=90 | mean=108 | max=481
+2026-05-06 20:34:28 | INFO     | __main__ | --- Step: Stratified split (val=10%, test=10%) ---
+2026-05-06 20:34:28 | INFO     | __main__ |   train  : 48859 rows  |  {'negative': 17876, 'positive': 16506, 'neutral': 14477}
+2026-05-06 20:34:28 | INFO     | __main__ |   val    :  6108 rows  |  {'negative': 2235, 'positive': 2063, 'neutral': 1810}
+2026-05-06 20:34:28 | INFO     | __main__ |   test   :  6108 rows  |  {'negative': 2235, 'positive': 2063, 'neutral': 1810}
+2026-05-06 20:34:29 | INFO     | __main__ | Saved → D:\Senti-DLF\model\data\processed\train.parquet  (48859 rows)
+2026-05-06 20:34:29 | INFO     | __main__ | Saved → D:\Senti-DLF\model\data\processed\val.parquet  (6108 rows)
+2026-05-06 20:34:29 | INFO     | __main__ | Saved → D:\Senti-DLF\model\data\processed\test.parquet  (6108 rows)
+2026-05-06 20:34:29 | INFO     | __main__ | ============================================================
+2026-05-06 20:34:29 | INFO     | __main__ | Pipeline complete.
+2026-05-06 20:34:29 | INFO     | __main__ |   Train  : 48859 rows → train.parquet
+2026-05-06 20:34:29 | INFO     | __main__ |   Val    : 6108 rows → val.parquet
+2026-05-06 20:34:29 | INFO     | __main__ |   Test   : 6108 rows → test.parquet
+2026-05-06 20:34:29 | INFO     | __main__ | ============================================================
