@@ -74,8 +74,8 @@ class DatasetConfig:
     """
 
     # -- Paths ----------------------------------------------------------------
-    raw_dir: str = str(Path(__file__).resolve().parents[2] / "data" / "raw")
-    processed_dir: str = str(Path(__file__).resolve().parents[2] / "data" / "processed")
+    raw_dir: str = str(Path(__file__).resolve().parents[2] / "model" / "data" / "raw")
+    processed_dir: str = str(Path(__file__).resolve().parents[2] / "model" / "data" / "processed")
 
     train_file: str = "train.parquet"
     val_file: str   = "val.parquet"

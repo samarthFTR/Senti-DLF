@@ -1,0 +1,89 @@
+# ==============================================================================
+# Senti-DLF .gitignore
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Datasets & Data Engineering (CRITICAL)
+# Data belongs in S3, DVC, or equivalent — never commit massive CSVs/Parquets to git.
+# ------------------------------------------------------------------------------
+model/data/raw/*
+!model/data/raw/.gitkeep
+model/data/processed/*
+!model/data/processed/.gitkeep
+
+# ------------------------------------------------------------------------------
+# 2. Model Artifacts & Checkpoints (CRITICAL)
+# Trained weights, logs, and adapter matrices belong in HuggingFace Hub / MLflow.
+# ------------------------------------------------------------------------------
+model/saved_models/*
+!model/saved_models/.gitkeep
+
+# ------------------------------------------------------------------------------
+# 3. Environment & Secrets
+# ------------------------------------------------------------------------------
+.env
+.env.local
+.env.*
+!.env.example
+
+# ------------------------------------------------------------------------------
+# 4. Logs & Debugging
+# ------------------------------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ------------------------------------------------------------------------------
+# 5. Python & OS Cache
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments
+.env_venv/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+myenv/
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ------------------------------------------------------------------------------
+# 6. IDEs & Tooling
+# ------------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+htmlcov/
+.tox/
+build/
+dist/
+*.egg-info/
+
+# ------------------------------------------------------------------------------
+# 7. Frontend (For when we build the React UI)
+# ------------------------------------------------------------------------------
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.next/
+frontend/out/
