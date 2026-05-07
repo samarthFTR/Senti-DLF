@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     api_version: str = "1.0.0"
     
     # Model configuration
-    model_dir: str = str(_PROJECT_ROOT / "model" / "saved_models" / "distilbert_v1")
-    tokenizer_name: str = "distilbert-base-uncased"
+    model_dir: str = str(_PROJECT_ROOT / "model" / "saved_models" / "bert_v1")
+    tokenizer_name: str = "bert-base-uncased"
     max_sequence_length: int = 128
     
     # Confidence threshold for returning a valid prediction

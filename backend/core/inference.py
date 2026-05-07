@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 import tensorflow as tf
-from transformers import DistilBertTokenizerFast
+from transformers import BertTokenizerFast
 from backend.core.config import settings
 
 log = logging.getLogger("uvicorn.error")
@@ -31,7 +31,7 @@ class SentimentInferenceEngine:
             return
 
         log.info("Initialising Inference Engine...")
-        self.tokenizer = DistilBertTokenizerFast.from_pretrained(settings.tokenizer_name)
+        self.tokenizer = BertTokenizerFast.from_pretrained(settings.tokenizer_name)
         
         log.info("Loading model architecture and weights...")
         try:
@@ -65,12 +65,14 @@ class SentimentInferenceEngine:
             padding="max_length",
             truncation=True,
             return_attention_mask=True,
+            return_token_type_ids=True,
             return_tensors="np"
         )
 
         input_dict = {
             "input_ids": encoded["input_ids"].astype(np.int32),
-            "attention_mask": encoded["attention_mask"].astype(np.int32)
+            "attention_mask": encoded["attention_mask"].astype(np.int32),
+            "token_type_ids": encoded["token_type_ids"].astype(np.int32)
         }
 
         # 2. Forward Pass

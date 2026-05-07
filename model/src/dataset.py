@@ -7,7 +7,7 @@ Public API
 ----------
   DatasetConfig   : Dataclass holding all paths and pipeline hyperparameters.
   SentimentDataset: Loads raw CSV/Parquet files, tokenizes text with
-                    DistilBertTokenizerFast, and returns ready-to-train
+                    BertTokenizerFast, and returns ready-to-train
                     tf.data.Dataset objects.
 
 Typical usage
@@ -32,7 +32,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from transformers import DistilBertTokenizerFast
+from transformers import BertTokenizerFast
 
 from model.src.utils import LABEL_MAP, get_logger, set_seed
 
@@ -86,7 +86,7 @@ class DatasetConfig:
     label_col: str = "label"
 
     # -- Tokenizer & model identity -------------------------------------------
-    tokenizer_name: str = "distilbert-base-uncased"
+    tokenizer_name: str = "bert-base-uncased"
 
     # -- Pipeline hyperparameters ---------------------------------------------
     max_length: int     = 128
@@ -118,7 +118,7 @@ class SentimentDataset:
     1. Load a CSV or Parquet split from disk into a Pandas DataFrame.
     2. Validate columns and drop rows with missing values.
     3. Map string labels → integer IDs using LABEL_MAP from utils.
-    4. Tokenize the text column with DistilBertTokenizerFast in batch mode.
+    4. Tokenize the text column with BertTokenizerFast in batch mode.
     5. Wrap the result in a tf.data.Dataset with shuffle / batch / prefetch.
 
     Parameters
@@ -144,7 +144,7 @@ class SentimentDataset:
         set_seed(self.config.seed)
 
         log.info("Initialising tokenizer: %s", self.config.tokenizer_name)
-        self.tokenizer = DistilBertTokenizerFast.from_pretrained(
+        self.tokenizer = BertTokenizerFast.from_pretrained(
             self.config.tokenizer_name
         )
         log.info(
@@ -317,7 +317,7 @@ class SentimentDataset:
 
     def _tokenize(self, texts: List[str]) -> Dict[str, np.ndarray]:
         """
-        Batch-tokenize a list of strings using DistilBertTokenizerFast.
+        Batch-tokenize a list of strings using BertTokenizerFast.
 
         Truncation and padding are both applied to `max_length` so that all
         sequences in a batch have an identical shape — required by tf.data.
@@ -335,12 +335,13 @@ class SentimentDataset:
             padding="max_length",      # pad shorter sequences to max_length
             truncation=True,           # truncate longer sequences
             return_attention_mask=True,
-            return_token_type_ids=False,  # DistilBERT has no token type IDs
+            return_token_type_ids=True,
             return_tensors="np",       # return NumPy arrays for tf.data compat
         )
         return {
             "input_ids":      encoding["input_ids"].astype(np.int32),
             "attention_mask": encoding["attention_mask"].astype(np.int32),
+            "token_type_ids": encoding["token_type_ids"].astype(np.int32),
         }
 
     def _build_tf_dataset(
@@ -377,6 +378,7 @@ class SentimentDataset:
             {
                 "input_ids":      encoded["input_ids"],
                 "attention_mask": encoded["attention_mask"],
+                "token_type_ids": encoded["token_type_ids"],
             },
             labels_array,
         ))

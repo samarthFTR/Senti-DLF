@@ -3,7 +3,7 @@ model.py
 --------
 Model architecture for the Senti-DLF sentiment classifier.
 
-Wraps HuggingFace's TFDistilBertModel inside a Keras Functional model,
+Wraps HuggingFace's TFBertModel inside a Keras Functional model,
 optionally injecting LoRA (Low-Rank Adaptation) adapters via the PEFT
 library for lightweight fine-tuning.  Only ~1-3 M parameters are trained
 when LoRA is enabled — the remaining 64 M base weights stay frozen.
@@ -81,7 +81,7 @@ class ModelConfig:
     """
 
     # -- Base transformer -----------------------------------------------------
-    model_name: str     = "distilbert-base-uncased"
+    model_name: str     = "bert-base-uncased"
     num_labels: int     = len(LABEL_MAP)   # 3 (negative / neutral / positive)
     max_length: int     = 128
     dropout_rate: float = 0.2
@@ -114,7 +114,7 @@ class SentimentModel:
     Input (input_ids, attention_mask)
         │
         ▼
-    TFDistilBertModel           ← 66 M params (frozen when LoRA is on)
+    TFBertModel                 ← ~110 M params (frozen when LoRA is on)
         │  last_hidden_state [batch, seq_len, 768]
         │
         ▼
@@ -163,7 +163,7 @@ class SentimentModel:
         Assemble and compile the full Keras model.
 
         Steps:
-            1. Load TFDistilBertModel weights from HuggingFace.
+            1. Load TFBertModel weights from HuggingFace.
             2. Optionally inject LoRA adapters and freeze the base.
             3. Build the Keras Functional graph (inputs → CLS → head).
             4. Compile with AdamW + sparse categorical cross-entropy.
@@ -210,12 +210,12 @@ class SentimentModel:
         Download (or load from local cache) the HuggingFace pre-trained weights.
 
         Returns:
-            TFDistilBertModel instance with its pre-trained weights.
+            TFBertModel instance with its pre-trained weights.
         """
         log.info("Loading base transformer: %s", self.config.model_name)
-        from transformers import TFDistilBertModel
+        from transformers import TFBertModel
 
-        base = TFDistilBertModel.from_pretrained(self.config.model_name, use_safetensors=False)
+        base = TFBertModel.from_pretrained(self.config.model_name, use_safetensors=False)
         log.info("Base transformer loaded.")
         return base
 
@@ -228,7 +228,7 @@ class SentimentModel:
         frozen; the effective weight becomes W + (B @ A) * (alpha / r).
 
         Args:
-            base_model: TFDistilBertModel with frozen weights.
+            base_model: TFBertModel with frozen weights.
 
         Returns:
             PEFT-wrapped model with LoRA adapters injected.
@@ -271,18 +271,19 @@ class SentimentModel:
             # Only the last 2 transformer blocks (out of 6) will be trainable.
             log.info("Freezing embeddings and transformer layers 0-3...")
             
-            # Access the underlying distilbert layers
-            transformer_layer = base_model.distilbert.transformer
-            embeddings_layer = base_model.distilbert.embeddings
+            # Access the underlying bert layers
+            # BERT has 12 layers. We freeze embeddings and layers 0-9. Unfreeze 10-11.
+            transformer_layer = base_model.bert.encoder
+            embeddings_layer = base_model.bert.embeddings
             
             embeddings_layer.trainable = False
-            for i in range(4):
+            for i in range(10):
                 transformer_layer.layer[i].trainable = False
                 
-            for i in range(4, 6):
+            for i in range(10, 12):
                 transformer_layer.layer[i].trainable = True
                 
-            log.info("Layers 4-5 and classification head are trainable. (Memory efficient)")
+            log.info("Layers 10-11 and classification head are trainable. (Memory efficient)")
             return base_model
 
     def _build_keras_graph(self, base_model) -> tf.keras.Model:
@@ -311,12 +312,18 @@ class SentimentModel:
             dtype=tf.int32,
             name="attention_mask",
         )
+        token_type_ids = tf.keras.layers.Input(
+            shape=(self.config.max_length,),
+            dtype=tf.int32,
+            name="token_type_ids",
+        )
 
         # -- Transformer forward pass -----------------------------------------
         # last_hidden_state: (batch_size, seq_len, hidden_dim=768)
         outputs = base_model(
             input_ids=input_ids,
             attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
             training=False,       # will be overridden to True during .fit()
         )
         sequence_output = outputs.last_hidden_state
@@ -338,9 +345,13 @@ class SentimentModel:
 
         # -- Wrap into Keras Model --------------------------------------------
         model = tf.keras.Model(
-            inputs={"input_ids": input_ids, "attention_mask": attention_mask},
+            inputs={
+                "input_ids": input_ids, 
+                "attention_mask": attention_mask,
+                "token_type_ids": token_type_ids
+            },
             outputs=logits,
-            name="SentiDLF_DistilBERT",
+            name="SentiDLF_BERT",
         )
         log.info("Keras graph assembled.")
         return model

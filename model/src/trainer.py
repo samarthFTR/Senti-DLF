@@ -63,7 +63,7 @@ class TrainerConfig:
     
     checkpoint_dir: str  = str(_PROJECT_ROOT / "model" / "saved_models" / "checkpoints")
     log_dir: str         = str(_PROJECT_ROOT / "model" / "saved_models" / "logs")
-    final_model_dir: str = str(_PROJECT_ROOT / "model" / "saved_models" / "distilbert_v1")
+    final_model_dir: str = str(_PROJECT_ROOT / "model" / "saved_models" / "bert_v1")
 
 
 # ---------------------------------------------------------------------------
