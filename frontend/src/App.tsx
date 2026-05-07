@@ -76,7 +76,7 @@ function App() {
             <Sparkles size={32} color="#8E2DE2" />
             Senti-DLF
           </h1>
-          <p className="subtitle">DistilBERT Transformer Fine-Tuned for Twitter Sentiment</p>
+          <p className="subtitle">BERT Transformer Fine-Tuned for Twitter Sentiment</p>
         </div>
 
         <div className="input-container">
