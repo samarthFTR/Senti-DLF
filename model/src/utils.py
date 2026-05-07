@@ -29,6 +29,7 @@ LABEL_MAP: Dict[str, int] = {
     "negative": 0,
     "neutral":  1,
     "positive": 2,
+    "mixed":    3,
 }
 
 ID_TO_LABEL: Dict[int, str] = {v: k for k, v in LABEL_MAP.items()}
