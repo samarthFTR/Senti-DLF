@@ -11,6 +11,7 @@
   --positive: #00F260;
   --neutral: #0575E6;
   --negative: #FF0055;
+  --mixed: #FFA500;
   
   --text-main: #FFFFFF;
   --text-muted: rgba(255, 255, 255, 0.5);
@@ -190,6 +191,7 @@ textarea::placeholder {
 .badge-positive { background: rgba(0, 242, 96, 0.15); color: var(--positive); border: 1px solid rgba(0, 242, 96, 0.3); }
 .badge-neutral { background: rgba(5, 117, 230, 0.15); color: #4facfe; border: 1px solid rgba(5, 117, 230, 0.3); }
 .badge-negative { background: rgba(255, 0, 85, 0.15); color: var(--negative); border: 1px solid rgba(255, 0, 85, 0.3); }
+.badge-mixed { background: rgba(255, 165, 0, 0.15); color: var(--mixed); border: 1px solid rgba(255, 165, 0, 0.3); }
 
 .prob-container {
   display: flex;
@@ -229,6 +231,7 @@ textarea::placeholder {
 .fill-positive { background: var(--positive); box-shadow: 0 0 10px rgba(0, 242, 96, 0.5); }
 .fill-neutral { background: var(--neutral); box-shadow: 0 0 10px rgba(5, 117, 230, 0.5); }
 .fill-negative { background: var(--negative); box-shadow: 0 0 10px rgba(255, 0, 85, 0.5); }
+.fill-mixed { background: var(--mixed); box-shadow: 0 0 10px rgba(255, 165, 0, 0.5); }
 
 .prob-value {
   width: 45px;

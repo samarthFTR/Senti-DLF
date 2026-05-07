@@ -8,10 +8,11 @@ interface Probabilities {
   negative: number;
   neutral: number;
   positive: number;
+  mixed: number;
 }
 
 interface SentimentResult {
-  label: 'negative' | 'neutral' | 'positive';
+  label: 'negative' | 'neutral' | 'positive' | 'mixed';
   confidence: number;
   probabilities: Probabilities;
 }
@@ -59,6 +60,7 @@ function App() {
       case 'positive': return <CheckCircle2 size={24} />;
       case 'neutral': return <MinusCircle size={24} />;
       case 'negative': return <AlertCircle size={24} />;
+      case 'mixed': return <RefreshCw size={24} />;
       default: return null;
     }
   };
@@ -144,7 +146,7 @@ function App() {
               </div>
 
               <div className="prob-container">
-                {(['positive', 'neutral', 'negative'] as const).map((label) => (
+                {(['positive', 'mixed', 'neutral', 'negative'] as const).map((label) => (
                   <div className="prob-row" key={label}>
                     <div className="prob-label">{label}</div>
                     <div className="prob-bar-bg">
