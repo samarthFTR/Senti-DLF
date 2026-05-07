@@ -109,12 +109,19 @@ class ModelTrainer:
         log.info("Senti-DLF  ·  Training Loop  ·  START")
         log.info("=" * 60)
 
-        # 1. Load Data
-        train_ds, val_ds, test_ds = self.dataset.get_all_splits()
+        # Load datasets (using the new Reddit parquets for stacked training)
+        log.info("Loading Reddit datasets for stacked training...")
+        train_ds = self.dataset.get_split("train")
+        val_ds   = self.dataset.get_split("val")
+        test_ds  = self.dataset.get_split("test")
 
         # 2. Build Model
         self.model = self.model_wrapper.build()
-
+        
+        # Load Twitter checkpoint
+        weights_path = str(_PROJECT_ROOT / "model" / "saved_models" / "checkpoints" / "best_weights.h5")
+        log.info(f"Loading Twitter weights from {weights_path}")
+        self.model.load_weights(weights_path)
         # 3. Setup Callbacks
         callbacks = [
             tf.keras.callbacks.EarlyStopping(
@@ -165,6 +172,10 @@ if __name__ == "__main__":
     # Standard hyperparams for RTX 3050 (4GB VRAM)
     # Batch size reduced to 16 to prevent Out Of Memory (OOM) errors.
     d_cfg = DatasetConfig(batch_size=16)
+    d_cfg.train_file = "reddit_train.parquet"
+    d_cfg.val_file = "reddit_val.parquet"
+    d_cfg.test_file = "reddit_test.parquet"
+    
     m_cfg = ModelConfig(learning_rate=3e-5)
     t_cfg = TrainerConfig(epochs=3)
 
