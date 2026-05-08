@@ -22,6 +22,18 @@ interface ApiResponse {
   result: SentimentResult;
 }
 
+interface AspectInsight {
+  aspect: string;
+  sentiment: string;
+  mention_count: number;
+  message: string;
+}
+
+interface BatchApiResponse {
+  results: ApiResponse[];
+  insights: AspectInsight[];
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<'text' | 'file'>('text');
   const [text, setText] = useState('');
@@ -30,6 +42,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SentimentResult | null>(null);
   const [batchResults, setBatchResults] = useState<ApiResponse[] | null>(null);
+  const [batchInsights, setBatchInsights] = useState<AspectInsight[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const analyzeSentiment = async () => {
@@ -40,6 +53,7 @@ function App() {
     setError(null);
     setResult(null);
     setBatchResults(null);
+    setBatchInsights(null);
 
     try {
       if (activeTab === 'text') {
@@ -71,6 +85,7 @@ function App() {
 
         const data = await response.json();
         setBatchResults(data.results);
+        setBatchInsights(data.insights);
       }
     } catch (err: any) {
       setError(err.message || 'An unknown error occurred.');
@@ -270,6 +285,24 @@ function App() {
               transition={{ delay: 0.1, duration: 0.5 }}
             >
               <h3 className="batch-title">Analyzed {batchResults.length} Reviews</h3>
+              
+              {batchInsights && batchInsights.length > 0 && (
+                <div className="insights-container">
+                  <h4 className="insights-title">Key Insights (Buzz Words)</h4>
+                  <div className="insights-list">
+                    {batchInsights.map((insight, idx) => (
+                      <div key={idx} className={`insight-card badge-${insight.sentiment}`}>
+                        <div className="insight-header">
+                          <span className="insight-aspect">{insight.aspect}</span>
+                          <span className="insight-count">{insight.mention_count} mentions</span>
+                        </div>
+                        <p className="insight-message">{getIcon(insight.sentiment)} {insight.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="batch-list">
                 {batchResults.map((res, idx) => (
                   <div key={idx} className="batch-item">
