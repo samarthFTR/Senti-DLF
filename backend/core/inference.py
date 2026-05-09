@@ -10,8 +10,7 @@ log = logging.getLogger("uvicorn.error")
 ID_TO_LABEL = {
     0: "negative",
     1: "neutral",
-    2: "positive",
-    3: "mixed"
+    2: "positive"
 }
 
 class SentimentInferenceEngine:
@@ -77,22 +76,34 @@ class SentimentInferenceEngine:
         }
 
         # 2. Forward Pass
-        # The model outputs logits, so we apply softmax to get probabilities
+        # The model outputs independent logits, so we apply sigmoid for multi-label probabilities
         logits = self.model.predict(input_dict, verbose=0)
-        probabilities = tf.nn.softmax(logits, axis=-1).numpy()
+        probabilities = tf.nn.sigmoid(logits).numpy()
 
         # 3. Decode results
         results = []
         for probs in probabilities:
-            pred_id = int(np.argmax(probs))
-            confidence = float(probs[pred_id])
-            
             prob_dict = {
-                ID_TO_LABEL[i]: float(probs[i]) for i in range(len(ID_TO_LABEL))
+                "negative": float(probs[0]),
+                "neutral":  float(probs[1]),
+                "positive": float(probs[2]),
+                "mixed":    0.0 # Will calculate if thresholds met
             }
             
+            # User's Multi-Label Threshold Logic
+            if prob_dict["positive"] > 0.4 and prob_dict["negative"] > 0.4:
+                label = "mixed"
+                # Confidence is the average of both high signals
+                confidence = (prob_dict["positive"] + prob_dict["negative"]) / 2.0
+                prob_dict["mixed"] = confidence
+            else:
+                # Standard argmax over the 3 core classes
+                pred_id = int(np.argmax(probs))
+                label = ID_TO_LABEL[pred_id]
+                confidence = float(probs[pred_id])
+            
             results.append({
-                "label": ID_TO_LABEL[pred_id],
+                "label": label,
                 "confidence": confidence,
                 "probabilities": prob_dict
             })
