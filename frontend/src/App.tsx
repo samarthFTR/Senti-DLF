@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Loader2, CheckCircle2, MinusCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Sparkles, Loader2, CheckCircle2, MinusCircle, AlertCircle, RefreshCw, UploadCloud, FileText, X } from 'lucide-react';
 import './index.css';
 
 // TypeScript Interfaces
@@ -23,35 +23,71 @@ interface ApiResponse {
 }
 
 function App() {
+  const [activeTab, setActiveTab] = useState<'text' | 'file'>('text');
   const [text, setText] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SentimentResult | null>(null);
+  const [batchResults, setBatchResults] = useState<ApiResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const analyzeSentiment = async () => {
-    if (!text.trim()) return;
+    if (activeTab === 'text' && !text.trim()) return;
+    if (activeTab === 'file' && !file) return;
     
     setLoading(true);
     setError(null);
     setResult(null);
+    setBatchResults(null);
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.trim() }),
-      });
+      if (activeTab === 'text') {
+        const response = await fetch('http://localhost:8000/api/v1/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text.trim() }),
+        });
 
-      if (!response.ok) {
-        throw new Error('Failed to analyze sentiment. Is the backend running?');
+        if (!response.ok) {
+          throw new Error('Failed to analyze sentiment. Is the backend running?');
+        }
+
+        const data: ApiResponse = await response.json();
+        setResult(data.result);
+      } else {
+        const formData = new FormData();
+        formData.append('file', file!);
+        
+        const response = await fetch('http://localhost:8000/api/v1/predict/file', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => null);
+          throw new Error(errData?.detail || 'Failed to process file.');
+        }
+
+        const data = await response.json();
+        setBatchResults(data.results);
       }
-
-      const data: ApiResponse = await response.json();
-      setResult(data.result);
     } catch (err: any) {
       setError(err.message || 'An unknown error occurred.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFile = e.dataTransfer.files[0];
+      if (droppedFile.type === 'text/plain' || droppedFile.name.endsWith('.txt')) {
+        setFile(droppedFile);
+      } else {
+        setError('Please upload a valid .txt file');
+      }
     }
   };
 
@@ -81,33 +117,92 @@ function App() {
           <p className="subtitle">BERT Transformer Fine-Tuned for Twitter Sentiment</p>
         </div>
 
-        <div className="input-container">
-          <textarea 
-            placeholder="Type a tweet or statement here to analyze its sentiment... (e.g. 'I absolutely love the new design!')"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                analyzeSentiment();
-              }
-            }}
-          />
+        <div className="tabs">
+          <button 
+            className={`tab ${activeTab === 'text' ? 'active' : ''}`}
+            onClick={() => setActiveTab('text')}
+          >
+            <FileText size={18} />
+            Text Input
+          </button>
+          <button 
+            className={`tab ${activeTab === 'file' ? 'active' : ''}`}
+            onClick={() => setActiveTab('file')}
+          >
+            <UploadCloud size={18} />
+            File Upload
+          </button>
         </div>
+
+        {activeTab === 'text' ? (
+          <div className="input-container">
+            <textarea 
+              placeholder="Type a tweet or statement here to analyze its sentiment... (e.g. 'I absolutely love the new design!')"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  analyzeSentiment();
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <div 
+            className="file-upload-container"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleFileDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input 
+              type="file" 
+              accept=".txt" 
+              className="hidden" 
+              ref={fileInputRef}
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  setFile(e.target.files[0]);
+                }
+              }}
+            />
+            {file ? (
+              <div className="file-info" onClick={(e) => e.stopPropagation()}>
+                <FileText size={32} className="file-icon" />
+                <div className="file-details">
+                  <span className="file-name">{file.name}</span>
+                  <span className="file-size">{(file.size / 1024).toFixed(1)} KB</span>
+                </div>
+                <button 
+                  className="remove-file-btn" 
+                  onClick={() => setFile(null)}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            ) : (
+              <div className="upload-prompt">
+                <UploadCloud size={48} className="upload-icon" />
+                <p>Drag & drop a .txt file here, or click to browse</p>
+                <span className="upload-hint">File should contain reviews separated by blank lines</span>
+              </div>
+            )}
+          </div>
+        )}
 
         <button 
           className="btn-primary" 
           onClick={analyzeSentiment}
-          disabled={loading || text.trim().length === 0}
+          disabled={loading || (activeTab === 'text' ? text.trim().length === 0 : !file)}
         >
           {loading ? (
             <>
               <Loader2 className="spin" size={20} />
-              <span>Analyzing Vectors...</span>
+              <span>Analyzing...</span>
             </>
           ) : (
             <>
               <RefreshCw size={20} />
-              <span>Analyze Sentiment (Ctrl + Enter)</span>
+              <span>Analyze Sentiment {activeTab === 'text' && '(Ctrl + Enter)'}</span>
             </>
           )}
         </button>
@@ -159,6 +254,29 @@ function App() {
                     </div>
                     <div className="prob-value">
                       {(result.probabilities[label] * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {batchResults && (
+            <motion.div 
+              key="batch-results"
+              className="batch-results-container"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.5 }}
+            >
+              <h3 className="batch-title">Analyzed {batchResults.length} Reviews</h3>
+              <div className="batch-list">
+                {batchResults.map((res, idx) => (
+                  <div key={idx} className="batch-item">
+                    <div className="batch-item-text">"{res.text}"</div>
+                    <div className={`batch-item-badge badge-${res.result.label}`}>
+                      {getIcon(res.result.label)}
+                      {res.result.label} ({(res.result.confidence * 100).toFixed(1)}%)
                     </div>
                   </div>
                 ))}
