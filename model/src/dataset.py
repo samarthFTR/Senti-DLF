@@ -372,6 +372,7 @@ class SentimentDataset:
         encoded = self._tokenize(texts)
 
         labels_array = np.array(labels, dtype=np.int32)
+        labels_array = tf.keras.utils.to_categorical(labels_array, num_classes=self.num_classes())
 
         # Build dataset from in-memory tensors
         dataset = tf.data.Dataset.from_tensor_slices((

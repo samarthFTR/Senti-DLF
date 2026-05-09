@@ -7,16 +7,12 @@ log = get_logger("model.src.preprocess_joint")
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 def bin_reddit(score: float) -> str:
-    # Introduce the 'mixed' class for Reddit data
-    if score < -0.2:
+    if score < -0.1:
         return "negative"
-    elif score > 0.2:
+    elif score > 0.1:
         return "positive"
-    elif abs(score) <= 0.05:
-        return "neutral"
     else:
-        # Slight scores might imply conflicting/mixed sentiment
-        return "mixed"
+        return "neutral"
 
 def process_joint():
     set_seed(42)
@@ -32,12 +28,11 @@ def process_joint():
     tw_df = pd.concat([tw_train, tw_val], ignore_index=True)
     tw_df = tw_df[["text", "sentiment"]].dropna()
     
-    # Map Irrelevant -> mixed
+    # Map Twitter labels (dropping Irrelevant to maintain pure signal for Sigmoid)
     tw_map = {
         "Positive": "positive",
         "Negative": "negative",
-        "Neutral": "neutral",
-        "Irrelevant": "mixed"
+        "Neutral": "neutral"
     }
     tw_df["label"] = tw_df["sentiment"].map(tw_map)
     tw_df = tw_df.drop(columns=["sentiment"]).dropna()

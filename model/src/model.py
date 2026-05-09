@@ -376,12 +376,12 @@ class SentimentModel:
             optimizer=tf.keras.optimizers.Adam(
                 learning_rate=self.config.learning_rate,
             ),
-            loss=tf.keras.losses.SparseCategoricalCrossentropy(
+            loss=tf.keras.losses.BinaryCrossentropy(
                 from_logits=True,
-                reduction="auto",
+                label_smoothing=self.config.label_smoothing,
             ),
             metrics=[
-                tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy"),
+                tf.keras.metrics.BinaryAccuracy(name="accuracy"),
             ],
         )
 
