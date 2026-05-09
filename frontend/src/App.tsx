@@ -1,9 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Loader2, CheckCircle2, MinusCircle, AlertCircle, RefreshCw, UploadCloud, FileText, X } from 'lucide-react';
+import { 
+  Sparkles, Loader2, CheckCircle2, MinusCircle, AlertCircle, 
+  RefreshCw, UploadCloud, FileText, X, LayoutDashboard, 
+  History, PieChart, Settings 
+} from 'lucide-react';
 import './index.css';
 
-// TypeScript Interfaces
 interface Probabilities {
   negative: number;
   neutral: number;
@@ -29,21 +32,29 @@ interface AspectInsight {
   message: string;
 }
 
-interface BatchApiResponse {
-  results: ApiResponse[];
-  insights: AspectInsight[];
-}
-
 function App() {
   const [activeTab, setActiveTab] = useState<'text' | 'file'>('text');
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
+  
   const [result, setResult] = useState<SentimentResult | null>(null);
   const [batchResults, setBatchResults] = useState<ApiResponse[] | null>(null);
   const [batchInsights, setBatchInsights] = useState<AspectInsight[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const stats = useMemo(() => {
+    if (!batchResults) return null;
+    const total = batchResults.length;
+    const positive = batchResults.filter(r => r.result.label === 'positive').length;
+    const negative = batchResults.filter(r => r.result.label === 'negative').length;
+    return {
+      total,
+      posPercent: ((positive / total) * 100).toFixed(1),
+      negPercent: ((negative / total) * 100).toFixed(1)
+    };
+  }, [batchResults]);
 
   const analyzeSentiment = async () => {
     if (activeTab === 'text' && !text.trim()) return;
@@ -108,216 +119,242 @@ function App() {
 
   const getIcon = (label: string) => {
     switch (label) {
-      case 'positive': return <CheckCircle2 size={24} />;
-      case 'neutral': return <MinusCircle size={24} />;
-      case 'negative': return <AlertCircle size={24} />;
-      case 'mixed': return <RefreshCw size={24} />;
+      case 'positive': return <CheckCircle2 size={20} />;
+      case 'neutral': return <MinusCircle size={20} />;
+      case 'negative': return <AlertCircle size={20} />;
+      case 'mixed': return <RefreshCw size={20} />;
       default: return null;
     }
   };
 
   return (
-    <div className="app-container">
-      <motion.div 
-        className="glass-panel"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div className="header">
-          <h1 className="title-glow">
-            <Sparkles size={32} color="#8E2DE2" />
-            Senti-DLF
-          </h1>
-          <p className="subtitle">BERT Transformer Fine-Tuned for Twitter Sentiment</p>
+    <div className="dashboard-layout">
+      {/* Sidebar */}
+      <aside className="sidebar">
+        <div className="sidebar-logo">
+          <Sparkles size={28} color="#8E2DE2" />
+          <span>Senti-DLF</span>
         </div>
+        <nav className="sidebar-nav">
+          <button className="nav-item active"><LayoutDashboard size={20} /> Dashboard</button>
+          <button className="nav-item"><History size={20} /> History</button>
+          <button className="nav-item"><PieChart size={20} /> Analytics</button>
+          <button className="nav-item"><Settings size={20} /> Settings</button>
+        </nav>
+      </aside>
 
-        <div className="tabs">
-          <button 
-            className={`tab ${activeTab === 'text' ? 'active' : ''}`}
-            onClick={() => setActiveTab('text')}
-          >
-            <FileText size={18} />
-            Text Input
-          </button>
-          <button 
-            className={`tab ${activeTab === 'file' ? 'active' : ''}`}
-            onClick={() => setActiveTab('file')}
-          >
-            <UploadCloud size={18} />
-            File Upload
-          </button>
-        </div>
-
-        {activeTab === 'text' ? (
-          <div className="input-container">
-            <textarea 
-              placeholder="Type a tweet or statement here to analyze its sentiment... (e.g. 'I absolutely love the new design!')"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                  analyzeSentiment();
-                }
-              }}
-            />
+      {/* Main Content */}
+      <main className="main-content">
+        <header className="topbar">
+          <div>
+            <h2 className="page-title">Sentiment Dashboard</h2>
+            <p className="page-subtitle">Analyze tweets, reviews, and feedback.</p>
           </div>
-        ) : (
-          <div 
-            className="file-upload-container"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleFileDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input 
-              type="file" 
-              accept=".txt" 
-              className="hidden" 
-              ref={fileInputRef}
-              onChange={(e) => {
-                if (e.target.files && e.target.files.length > 0) {
-                  setFile(e.target.files[0]);
-                }
-              }}
-            />
-            {file ? (
-              <div className="file-info" onClick={(e) => e.stopPropagation()}>
-                <FileText size={32} className="file-icon" />
-                <div className="file-details">
-                  <span className="file-name">{file.name}</span>
-                  <span className="file-size">{(file.size / 1024).toFixed(1)} KB</span>
-                </div>
-                <button 
-                  className="remove-file-btn" 
-                  onClick={() => setFile(null)}
-                >
-                  <X size={20} />
-                </button>
+          <div className="user-profile">
+            <div className="avatar">AD</div>
+            <span>Admin</span>
+          </div>
+        </header>
+
+        <div className="dashboard-grid">
+          
+          {/* Main Input Widget */}
+          <div className="widget input-widget">
+            <div className="widget-header">
+              <h3>Analyze Data</h3>
+            </div>
+            
+            <div className="tabs">
+              <button 
+                className={`tab ${activeTab === 'text' ? 'active' : ''}`}
+                onClick={() => setActiveTab('text')}
+              >
+                <FileText size={16} /> Text Input
+              </button>
+              <button 
+                className={`tab ${activeTab === 'file' ? 'active' : ''}`}
+                onClick={() => setActiveTab('file')}
+              >
+                <UploadCloud size={16} /> File Upload
+              </button>
+            </div>
+
+            {activeTab === 'text' ? (
+              <div className="input-container">
+                <textarea 
+                  placeholder="Type a statement here... (e.g. 'I absolutely love the new design!')"
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      analyzeSentiment();
+                    }
+                  }}
+                />
               </div>
             ) : (
-              <div className="upload-prompt">
-                <UploadCloud size={48} className="upload-icon" />
-                <p>Drag & drop a .txt file here, or click to browse</p>
-                <span className="upload-hint">File should contain reviews separated by blank lines</span>
+              <div 
+                className="file-upload-container"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleFileDrop}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input 
+                  type="file" 
+                  accept=".txt" 
+                  className="hidden" 
+                  ref={fileInputRef}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      setFile(e.target.files[0]);
+                    }
+                  }}
+                />
+                {file ? (
+                  <div className="file-info" onClick={(e) => e.stopPropagation()}>
+                    <FileText size={32} className="file-icon" />
+                    <div className="file-details">
+                      <span className="file-name">{file.name}</span>
+                      <span className="file-size">{(file.size / 1024).toFixed(1)} KB</span>
+                    </div>
+                    <button className="remove-file-btn" onClick={() => setFile(null)}>
+                      <X size={20} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="upload-prompt">
+                    <UploadCloud size={40} className="upload-icon" />
+                    <p>Drag & drop a .txt file, or browse</p>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        <button 
-          className="btn-primary" 
-          onClick={analyzeSentiment}
-          disabled={loading || (activeTab === 'text' ? text.trim().length === 0 : !file)}
-        >
-          {loading ? (
-            <>
-              <Loader2 className="spin" size={20} />
-              <span>Analyzing...</span>
-            </>
-          ) : (
-            <>
-              <RefreshCw size={20} />
-              <span>Analyze Sentiment {activeTab === 'text' && '(Ctrl + Enter)'}</span>
-            </>
-          )}
-        </button>
-
-        <AnimatePresence mode="wait">
-          {error && (
-            <motion.div 
-              key="error"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto', marginTop: '1rem' }}
-              exit={{ opacity: 0, height: 0 }}
-              style={{ color: '#FF0055', textAlign: 'center', fontSize: '0.9rem' }}
+            <button 
+              className="btn-primary" 
+              onClick={analyzeSentiment}
+              disabled={loading || (activeTab === 'text' ? text.trim().length === 0 : !file)}
             >
-              {error}
-            </motion.div>
-          )}
-
-          {result && (
-            <motion.div 
-              key="results"
-              className="results-container"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.5 }}
-            >
-              <div className="primary-result">
-                <motion.div 
-                  className={`result-badge badge-${result.label}`}
-                  initial={{ scale: 0.8 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: "spring", bounce: 0.5 }}
-                >
-                  {getIcon(result.label)}
-                  {result.label}
-                </motion.div>
-              </div>
-
-              <div className="prob-container">
-                {(['positive', 'mixed', 'neutral', 'negative'] as const).map((label) => (
-                  <div className="prob-row" key={label}>
-                    <div className="prob-label">{label}</div>
-                    <div className="prob-bar-bg">
-                      <motion.div 
-                        className={`prob-bar-fill fill-${label}`}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${result.probabilities[label] * 100}%` }}
-                        transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
-                      />
-                    </div>
-                    <div className="prob-value">
-                      {(result.probabilities[label] * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {batchResults && (
-            <motion.div 
-              key="batch-results"
-              className="batch-results-container"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.5 }}
-            >
-              <h3 className="batch-title">Analyzed {batchResults.length} Reviews</h3>
-              
-              {batchInsights && batchInsights.length > 0 && (
-                <div className="insights-container">
-                  <h4 className="insights-title">Key Insights (Buzz Words)</h4>
-                  <div className="insights-list">
-                    {batchInsights.map((insight, idx) => (
-                      <div key={idx} className={`insight-card badge-${insight.sentiment}`}>
-                        <div className="insight-header">
-                          <span className="insight-aspect">{insight.aspect}</span>
-                          <span className="insight-count">{insight.mention_count} mentions</span>
-                        </div>
-                        <p className="insight-message">{getIcon(insight.sentiment)} {insight.message}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              {loading ? (
+                <><Loader2 className="spin" size={18} /> Analyzing...</>
+              ) : (
+                <><RefreshCw size={18} /> Analyze Sentiment</>
               )}
+            </button>
 
-              <div className="batch-list">
-                {batchResults.map((res, idx) => (
-                  <div key={idx} className="batch-item">
-                    <div className="batch-item-text">"{res.text}"</div>
-                    <div className={`batch-item-badge badge-${res.result.label}`}>
-                      {getIcon(res.result.label)}
-                      {res.result.label} ({(res.result.confidence * 100).toFixed(1)}%)
+            <AnimatePresence>
+              {error && (
+                <motion.div 
+                  className="error-msg"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  {error}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Single Result inline */}
+            {result && (
+              <motion.div 
+                className="single-result-box"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <div className={`result-badge badge-${result.label}`}>
+                  {getIcon(result.label)} {result.label}
+                </div>
+                <div className="prob-mini-bars">
+                  {(['positive', 'mixed', 'neutral', 'negative'] as const).map(label => (
+                    <div className="prob-mini-row" key={label}>
+                      <span>{label}</span>
+                      <div className="bar-bg">
+                        <div className={`bar-fill fill-${label}`} style={{ width: `${result.probabilities[label] * 100}%` }} />
+                      </div>
+                      <span>{(result.probabilities[label] * 100).toFixed(0)}%</span>
                     </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Stats Row */}
+          {stats && (
+            <div className="stats-row">
+              <div className="stat-card">
+                <span className="stat-label">Total Analyzed</span>
+                <span className="stat-value">{stats.total}</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Positive Sentiment</span>
+                <span className="stat-value text-positive">{stats.posPercent}%</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Critical Feedback</span>
+                <span className="stat-value text-negative">{stats.negPercent}%</span>
+              </div>
+            </div>
+          )}
+
+          {/* Insights Widget */}
+          {batchInsights && batchInsights.length > 0 && (
+            <div className="widget insights-widget">
+              <div className="widget-header">
+                <h3>Key Insights</h3>
+              </div>
+              <div className="insights-grid">
+                {batchInsights.map((insight, idx) => (
+                  <div key={idx} className={`insight-card outline-${insight.sentiment}`}>
+                    <div className="insight-header">
+                      <span className="insight-aspect">{insight.aspect}</span>
+                      <span className="insight-count">{insight.mention_count} mentions</span>
+                    </div>
+                    <p className="insight-message">
+                      <span className={`icon-${insight.sentiment}`}>{getIcon(insight.sentiment)}</span>
+                      {insight.message}
+                    </p>
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
-      </motion.div>
+
+          {/* Batch List Widget */}
+          {batchResults && (
+            <div className="widget batch-widget">
+              <div className="widget-header">
+                <h3>Recent Reviews</h3>
+              </div>
+              <div className="batch-table-container">
+                <table className="batch-table">
+                  <thead>
+                    <tr>
+                      <th>Review Text</th>
+                      <th>Sentiment</th>
+                      <th>Confidence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {batchResults.map((res, idx) => (
+                      <tr key={idx}>
+                        <td className="review-cell">"{res.text}"</td>
+                        <td>
+                          <div className={`badge-small badge-${res.result.label}`}>
+                            {getIcon(res.result.label)} {res.result.label}
+                          </div>
+                        </td>
+                        <td className="conf-cell">{(res.result.confidence * 100).toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }
