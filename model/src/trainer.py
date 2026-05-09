@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 import sys
+import argparse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -140,12 +141,16 @@ class ModelTrainer:
         ]
 
         # 4. Train
+        # Weighted loss: Keep neutral class strong (index 1 is neutral)
+        class_weight = {0: 1.0, 1: 2.0, 2: 1.0}
+
         log.info("Starting model.fit() for %d epochs...", self.config.epochs)
         history = self.model.fit(
             train_ds,
             validation_data=val_ds,
             epochs=self.config.epochs,
             callbacks=callbacks,
+            class_weight=class_weight,
         )
 
         # 5. Evaluate on Test Set
@@ -165,6 +170,11 @@ class ModelTrainer:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train Senti-DLF Model")
+    parser.add_argument("--model", type=str, choices=["bert", "deberta"], default="bert",
+                        help="Choose base model: 'bert' (default) or 'deberta'")
+    args = parser.parse_args()
+
     # Standard hyperparams for RTX 3050 (4GB VRAM)
     # Batch size reduced to 16 to prevent Out Of Memory (OOM) errors.
     d_cfg = DatasetConfig(batch_size=16)
@@ -172,8 +182,25 @@ if __name__ == "__main__":
     d_cfg.val_file = "joint_val.parquet"
     d_cfg.test_file = "joint_test.parquet"
     
-    m_cfg = ModelConfig(learning_rate=3e-5)
-    t_cfg = TrainerConfig(epochs=3)
+    if args.model == "deberta":
+        d_cfg.tokenizer_name = "microsoft/deberta-v3-base"
+        d_cfg.batch_size = 4  # Reduce batch size significantly for DeBERTa to prevent OOM
+        m_cfg = ModelConfig(
+            model_name="microsoft/deberta-v3-base",
+            learning_rate=2e-5,  # Lower learning rate for DeBERTa
+            label_smoothing=0.1
+        )
+        t_cfg = TrainerConfig(epochs=3)
+        log.info("Configured for DeBERTa-v3-base training.")
+    else:
+        d_cfg.tokenizer_name = "bert-base-uncased"
+        m_cfg = ModelConfig(
+            model_name="bert-base-uncased",
+            learning_rate=3e-5,
+            label_smoothing=0.1
+        )
+        t_cfg = TrainerConfig(epochs=3)
+        log.info("Configured for BERT-base-uncased training.")
 
     trainer = ModelTrainer(t_cfg, d_cfg, m_cfg)
     trainer.train()

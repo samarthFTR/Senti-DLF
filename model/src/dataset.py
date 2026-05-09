@@ -32,7 +32,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from transformers import BertTokenizerFast
+from transformers import AutoTokenizer
 
 from model.src.utils import LABEL_MAP, get_logger, set_seed
 
@@ -144,8 +144,10 @@ class SentimentDataset:
         set_seed(self.config.seed)
 
         log.info("Initialising tokenizer: %s", self.config.tokenizer_name)
-        self.tokenizer = BertTokenizerFast.from_pretrained(
-            self.config.tokenizer_name
+        use_fast = "deberta" not in self.config.tokenizer_name.lower()
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.config.tokenizer_name,
+            use_fast=use_fast
         )
         log.info(
             "DatasetConfig → max_length=%d | batch_size=%d | labels=%d",

@@ -213,9 +213,9 @@ class SentimentModel:
             TFBertModel instance with its pre-trained weights.
         """
         log.info("Loading base transformer: %s", self.config.model_name)
-        from transformers import TFBertModel
+        from transformers import TFAutoModel
 
-        base = TFBertModel.from_pretrained(self.config.model_name, use_safetensors=False)
+        base = TFAutoModel.from_pretrained(self.config.model_name, use_safetensors=False)
         log.info("Base transformer loaded.")
         return base
 
@@ -273,15 +273,28 @@ class SentimentModel:
             
             # Access the underlying bert layers
             # BERT has 12 layers. We freeze embeddings and layers 0-9. Unfreeze 10-11.
-            transformer_layer = base_model.bert.encoder
-            embeddings_layer = base_model.bert.embeddings
-            
-            embeddings_layer.trainable = False
-            for i in range(10):
-                transformer_layer.layer[i].trainable = False
+            if hasattr(base_model, 'bert'):
+                transformer_layer = base_model.bert.encoder
+                embeddings_layer = base_model.bert.embeddings
                 
-            for i in range(10, 12):
-                transformer_layer.layer[i].trainable = True
+                embeddings_layer.trainable = False
+                for i in range(10):
+                    transformer_layer.layer[i].trainable = False
+                    
+                for i in range(10, 12):
+                    transformer_layer.layer[i].trainable = True
+            elif hasattr(base_model, 'deberta'):
+                transformer_layer = base_model.deberta.encoder
+                embeddings_layer = base_model.deberta.embeddings
+                
+                embeddings_layer.trainable = False
+                for i in range(10):
+                    transformer_layer.layer[i].trainable = False
+                    
+                for i in range(10, 12):
+                    transformer_layer.layer[i].trainable = True
+            else:
+                base_model.trainable = False
                 
             log.info("Layers 10-11 and classification head are trainable. (Memory efficient)")
             return base_model
