@@ -47,6 +47,54 @@ log = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Native TF Keras LoRA Implementation
+# ---------------------------------------------------------------------------
+
+class TF_LoRADense(tf.keras.layers.Layer):
+    def __init__(self, original_dense, r=8, alpha=16, dropout=0.1, **kwargs):
+        super().__init__(name=original_dense.name + "_lora", **kwargs)
+        # Rename the inner layer to avoid H5 group name collision with the
+        # original BERT layer registry entry (e.g. "query" -> "query_base")
+        original_dense._name = original_dense.name + "_base"
+        self.original_dense = original_dense
+        self.r = r
+        self.alpha = alpha
+        self.scaling = alpha / r
+        self.lora_dropout = tf.keras.layers.Dropout(dropout)
+
+    def build(self, input_shape):
+        if not self.original_dense.built:
+            self.original_dense.build(input_shape)
+        self.original_dense.trainable = False
+        self.lora_A = self.add_weight(
+            name='lora_A', shape=(input_shape[-1], self.r),
+            initializer=tf.keras.initializers.RandomNormal(stddev=1.0 / self.r), trainable=True
+        )
+        self.lora_B = self.add_weight(
+            name='lora_B', shape=(self.r, self.original_dense.units),
+            initializer='zeros', trainable=True
+        )
+        super().build(input_shape)
+
+    def call(self, inputs, *args, **kwargs):
+        orig_out = self.original_dense(inputs, *args, **kwargs)
+        lora_in = self.lora_dropout(inputs)
+        lora_out = tf.matmul(lora_in, self.lora_A)
+        lora_out = tf.matmul(lora_out, self.lora_B) * self.scaling
+        return orig_out + lora_out
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"r": self.r, "alpha": self.alpha,
+                        "dropout": self.lora_dropout.rate})
+        return config
+
+class LoRAModel(tf.keras.Model):
+    def __init__(self, inputs, outputs, lora_layers, **kwargs):
+        super().__init__(inputs=inputs, outputs=outputs, **kwargs)
+        self._lora_layers = lora_layers
+
+# ---------------------------------------------------------------------------
 # Config class
 # ---------------------------------------------------------------------------
 
@@ -221,83 +269,54 @@ class SentimentModel:
 
     def _apply_lora(self, base_model):
         """
-        Inject LoRA adapters into the base transformer using PEFT.
-
-        LoRA inserts two small trainable matrices (A, B) of rank `lora_r`
-        into each targeted attention projection.  The original weight W is
-        frozen; the effective weight becomes W + (B @ A) * (alpha / r).
-
-        Args:
-            base_model: TFBertModel with frozen weights.
-
-        Returns:
-            PEFT-wrapped model with LoRA adapters injected.
+        Inject Custom TF LoRA adapters into the base transformer.
         """
         log.info(
-            "Injecting LoRA adapters — target_modules=%s | r=%d | alpha=%d",
+            "Injecting TF-Native LoRA adapters — target_modules=%s | r=%d | alpha=%d",
             self.config.lora_target_modules,
             self.config.lora_r,
             self.config.lora_alpha,
         )
-        try:
-            from peft import LoraConfig, get_peft_model
+        base_model.trainable = False
+        lora_layers = []
 
-            lora_cfg = LoraConfig(
-                task_type="SEQ_CLS",
-                r=self.config.lora_r,
-                lora_alpha=self.config.lora_alpha,
-                lora_dropout=self.config.lora_dropout,
-                target_modules=list(self.config.lora_target_modules),
-                bias="none",
-            )
-            lora_model = get_peft_model(base_model, lora_cfg)
-
-            trainable, total = lora_model.get_nb_trainable_parameters()
-            log.info(
-                "LoRA applied — trainable params: %s / %s  (%.2f%%)",
-                f"{trainable:,}",
-                f"{total:,}",
-                100 * trainable / total,
-            )
-            return lora_model
-
-        except Exception as e:
-            log.warning(
-                "PEFT LoRA failed (likely due to PyTorch expectation in this peft version): %s\n"
-                "Falling back to NATIVE PARTIAL FINE-TUNING.", e
-            )
-            
-            # Fallback: Freeze the embeddings and the first 4 transformer blocks.
-            # Only the last 2 transformer blocks (out of 6) will be trainable.
-            log.info("Freezing embeddings and transformer layers 0-3...")
-            
-            # Access the underlying bert layers
-            # BERT has 12 layers. We freeze embeddings and layers 0-9. Unfreeze 10-11.
-            if hasattr(base_model, 'bert'):
-                transformer_layer = base_model.bert.encoder
-                embeddings_layer = base_model.bert.embeddings
-                
-                embeddings_layer.trainable = False
-                for i in range(10):
-                    transformer_layer.layer[i].trainable = False
-                    
-                for i in range(10, 12):
-                    transformer_layer.layer[i].trainable = True
-            elif hasattr(base_model, 'deberta'):
-                transformer_layer = base_model.deberta.encoder
-                embeddings_layer = base_model.deberta.embeddings
-                
-                embeddings_layer.trainable = False
-                for i in range(10):
-                    transformer_layer.layer[i].trainable = False
-                    
-                for i in range(10, 12):
-                    transformer_layer.layer[i].trainable = True
-            else:
-                base_model.trainable = False
-                
-            log.info("Layers 10-11 and classification head are trainable. (Memory efficient)")
+        if hasattr(base_model, 'bert'):
+            encoder = base_model.bert.encoder
+        elif hasattr(base_model, 'deberta'):
+            encoder = base_model.deberta.encoder
+        else:
+            log.warning("Unrecognized base model. Falling back to freezing.")
             return base_model
+
+        for layer in encoder.layer:
+            if hasattr(layer, 'attention') and hasattr(layer.attention, 'self_attention'):
+                self_attn = layer.attention.self_attention
+                
+                if hasattr(self_attn, 'query') and hasattr(self_attn, 'value'):
+                    self_attn.query = TF_LoRADense(
+                        self_attn.query, r=self.config.lora_r, 
+                        alpha=self.config.lora_alpha, dropout=self.config.lora_dropout
+                    )
+                    self_attn.value = TF_LoRADense(
+                        self_attn.value, r=self.config.lora_r, 
+                        alpha=self.config.lora_alpha, dropout=self.config.lora_dropout
+                    )
+                    lora_layers.extend([self_attn.query, self_attn.value])
+                    
+                elif hasattr(self_attn, 'query_proj') and hasattr(self_attn, 'value_proj'):
+                    self_attn.query_proj = TF_LoRADense(
+                        self_attn.query_proj, r=self.config.lora_r, 
+                        alpha=self.config.lora_alpha, dropout=self.config.lora_dropout
+                    )
+                    self_attn.value_proj = TF_LoRADense(
+                        self_attn.value_proj, r=self.config.lora_r, 
+                        alpha=self.config.lora_alpha, dropout=self.config.lora_dropout
+                    )
+                    lora_layers.extend([self_attn.query_proj, self_attn.value_proj])
+        
+        base_model._lora_layers = lora_layers
+        log.info("TF-Native LoRA applied successfully.")
+        return base_model
 
     def _build_keras_graph(self, base_model) -> tf.keras.Model:
         """
@@ -357,15 +376,28 @@ class SentimentModel:
         )(x)
 
         # -- Wrap into Keras Model --------------------------------------------
-        model = tf.keras.Model(
-            inputs={
-                "input_ids": input_ids, 
-                "attention_mask": attention_mask,
-                "token_type_ids": token_type_ids
-            },
-            outputs=logits,
-            name="SentiDLF_BERT",
-        )
+        lora_layers = getattr(base_model, '_lora_layers', [])
+        if lora_layers:
+            model = LoRAModel(
+                inputs={
+                    "input_ids": input_ids, 
+                    "attention_mask": attention_mask,
+                    "token_type_ids": token_type_ids
+                },
+                outputs=logits,
+                lora_layers=lora_layers,
+                name="SentiDLF_BERT_LoRA",
+            )
+        else:
+            model = tf.keras.Model(
+                inputs={
+                    "input_ids": input_ids, 
+                    "attention_mask": attention_mask,
+                    "token_type_ids": token_type_ids
+                },
+                outputs=logits,
+                name="SentiDLF_BERT",
+            )
         log.info("Keras graph assembled.")
         return model
 

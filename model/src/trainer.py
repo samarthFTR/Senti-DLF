@@ -128,7 +128,7 @@ class ModelTrainer:
                 verbose=1,
             ),
             tf.keras.callbacks.ModelCheckpoint(
-                filepath=os.path.join(self.config.checkpoint_dir, "best_weights.h5"),
+                filepath=os.path.join(self.config.checkpoint_dir, f"{'deberta' if 'deberta' in self.config.final_model_dir else 'bert'}_best_weights.ckpt"),
                 monitor="val_loss",
                 save_best_only=True,
                 save_weights_only=True,
@@ -176,8 +176,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Standard hyperparams for RTX 3050 (4GB VRAM)
-    # Batch size reduced to 16 to prevent Out Of Memory (OOM) errors.
-    d_cfg = DatasetConfig(batch_size=16)
+    # Batch size 8 for BERT with real LoRA (all 12 layers have active gradients)
+    d_cfg = DatasetConfig(batch_size=8)
     d_cfg.train_file = "joint_train.parquet"
     d_cfg.val_file = "joint_val.parquet"
     d_cfg.test_file = "joint_test.parquet"
@@ -190,16 +190,23 @@ if __name__ == "__main__":
             learning_rate=2e-5,  # Lower learning rate for DeBERTa
             label_smoothing=0.1
         )
-        t_cfg = TrainerConfig(epochs=3)
+        t_cfg = TrainerConfig(
+            epochs=3,
+            final_model_dir=str(Path(d_cfg.processed_dir).parent / "saved_models" / "deberta_v1")
+        )
         log.info("Configured for DeBERTa-v3-base training.")
     else:
         d_cfg.tokenizer_name = "bert-base-uncased"
+        d_cfg.batch_size = 8  # Real LoRA (all 12 layers) needs smaller batches on 4GB VRAM
         m_cfg = ModelConfig(
             model_name="bert-base-uncased",
             learning_rate=3e-5,
             label_smoothing=0.1
         )
-        t_cfg = TrainerConfig(epochs=3)
+        t_cfg = TrainerConfig(
+            epochs=3,
+            final_model_dir=str(Path(d_cfg.processed_dir).parent / "saved_models" / "bert_v2")
+        )
         log.info("Configured for BERT-base-uncased training.")
 
     trainer = ModelTrainer(t_cfg, d_cfg, m_cfg)
