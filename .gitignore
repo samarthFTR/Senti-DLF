@@ -87,3 +87,29 @@ frontend/dist/
 frontend/build/
 frontend/.next/
 frontend/out/
+
+# ------------------------------------------------------------------------------
+# 8. Scratch / Temporary Scripts
+# One-off debug and utility scripts — not part of the project source.
+# ------------------------------------------------------------------------------
+scratch/
+
+# ------------------------------------------------------------------------------
+# 9. TensorFlow / Keras Artifacts
+# ------------------------------------------------------------------------------
+# TensorBoard logs inside saved_models
+model/saved_models/logs/
+# TF checkpoint shard files (large binary)
+*.ckpt.data-*
+*.ckpt.index
+# Keras legacy H5 weight files (stored in checkpoints, not source)
+*.h5
+# TF SavedModel protocol buffers (tracked via DVC / HF Hub instead)
+saved_model.pb
+keras_metadata.pb
+
+# ------------------------------------------------------------------------------
+# 10. HuggingFace Transformers Cache
+# ------------------------------------------------------------------------------
+.cache/
+~/.cache/huggingface/
