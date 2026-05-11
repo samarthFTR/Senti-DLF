@@ -34,6 +34,7 @@ interface AspectInsight {
 
 function App() {
   const [activeTab, setActiveTab] = useState<'text' | 'file'>('text');
+  const [model, setModel] = useState<'bert' | 'deberta'>('bert');
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -71,7 +72,7 @@ function App() {
         const response = await fetch('http://localhost:8000/api/v1/predict', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: text.trim() }),
+          body: JSON.stringify({ text: text.trim(), model }),
         });
 
         if (!response.ok) {
@@ -83,6 +84,7 @@ function App() {
       } else {
         const formData = new FormData();
         formData.append('file', file!);
+        formData.append('model', model);
         
         const response = await fetch('http://localhost:8000/api/v1/predict/file', {
           method: 'POST',
@@ -177,6 +179,26 @@ function App() {
               >
                 <UploadCloud size={16} /> File Upload
               </button>
+              
+              <div className="model-selector" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.9rem', color: '#a0a0a0' }}>Model:</span>
+                <select 
+                  value={model} 
+                  onChange={(e) => setModel(e.target.value as 'bert' | 'deberta')}
+                  style={{ 
+                    padding: '6px 12px', 
+                    borderRadius: '8px', 
+                    background: 'rgba(255, 255, 255, 0.05)', 
+                    border: '1px solid rgba(255, 255, 255, 0.1)', 
+                    color: '#fff',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="bert" style={{ color: '#000' }}>BERT Base</option>
+                  <option value="deberta" style={{ color: '#000' }}>DeBERTa v3</option>
+                </select>
+              </div>
             </div>
 
             {activeTab === 'text' ? (
