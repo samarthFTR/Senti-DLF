@@ -11,6 +11,10 @@ class PredictRequest(BaseModel):
         max_length=1000, 
         description="The text to analyze for sentiment."
     )
+    model: str = Field(
+        default=None,
+        description="The model to use: 'bert' or 'deberta'"
+    )
 
 class BatchPredictRequest(BaseModel):
     """
@@ -21,4 +25,8 @@ class BatchPredictRequest(BaseModel):
         min_length=1, 
         max_length=64, 
         description="A list of strings to analyze."
+    )
+    model: str = Field(
+        default=None,
+        description="The model to use: 'bert' or 'deberta'"
     )

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, File, UploadFile
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form
 from typing import List
 import tempfile
 import os
@@ -24,7 +24,13 @@ def extract_dynamic_aspects(texts: List[str], top_n: int = 6) -> List[str]:
             "make", "get", "got", "go", "going", "know", "think", "see", "time",
             "people", "thing", "things", "way", "day", "don", "ve", "ll", "re",
             "did", "didn", "does", "doesn", "isn", "aren", "wasn", "weren",
-            "best", "worst", "better", "worse", "amazing", "horrible", "nice"
+            "best", "worst", "better", "worse", "amazing", "horrible", "nice",
+            # Verbs and generic words that aren't real aspects
+            "looked", "look", "looks", "seemed", "feel", "felt", "said", "told",
+            "came", "come", "went", "want", "wanted", "need", "needed", "asked",
+            "check", "checked", "checking", "told", "left", "said", "called",
+            "little", "big", "small", "old", "new", "clean", "dirty", "nice",
+            "place", "area", "night", "stay", "experience", "trip", "visit",
         ]
         
         vectorizer = CountVectorizer(
@@ -105,7 +111,7 @@ async def predict_single(
     Analyze the sentiment of a single piece of text.
     """
     try:
-        results = engine.predict([request.text])
+        results = engine.predict([request.text], model_type=request.model)
         result_data = results[0]
         
         return PredictResponse(
@@ -125,7 +131,7 @@ async def predict_batch(
     Analyze the sentiment of a batch of texts.
     """
     try:
-        results = engine.predict(request.texts)
+        results = engine.predict(request.texts, model_type=request.model)
         
         responses = []
         for text, result_data in zip(request.texts, results):
@@ -145,6 +151,7 @@ async def predict_batch(
 @router.post("/predict/file", response_model=BatchPredictResponse)
 async def predict_file(
     file: UploadFile = File(...),
+    model: str = Form(settings.model_type),
     engine: SentimentInferenceEngine = Depends(get_engine)
 ):
     """
@@ -167,7 +174,7 @@ async def predict_file(
         if not reviews:
             raise HTTPException(status_code=400, detail="No valid reviews found in the file.")
             
-        results = engine.predict(reviews)
+        results = engine.predict(reviews, model_type=model)
         
         responses = []
         for text, result_data in zip(reviews, results):

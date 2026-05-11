@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 import tensorflow as tf
-from transformers import BertTokenizerFast
+from transformers import AutoTokenizer
 from backend.core.config import settings
 
 log = logging.getLogger("uvicorn.error")
@@ -31,35 +31,95 @@ class SentimentInferenceEngine:
             return
 
         log.info("Initialising Inference Engine...")
-        self.tokenizer = BertTokenizerFast.from_pretrained(settings.tokenizer_name)
+        self.models = {}
+        self.tokenizers = {}
         
-        log.info("Loading model architecture and weights...")
+        # Load the model specified in environment/settings
+        self._load_model(settings.model_type)
+        self._initialized = True
+        
+    def _load_model(self, model_type: str):
+        if model_type in self.models:
+            return
+            
+        tokenizer_name = "microsoft/deberta-v3-base" if model_type == "deberta" else "bert-base-uncased"
+        use_fast = model_type != "deberta"
+        
+        log.info(f"Loading {model_type} tokenizer...")
+        self.tokenizers[model_type] = AutoTokenizer.from_pretrained(
+            tokenizer_name, use_fast=use_fast
+        )
+        
+        log.info(f"Loading {model_type} architecture and weights...")
         try:
             from model.src.model import SentimentModel, ModelConfig
-            import os
             from backend.core.config import _PROJECT_ROOT
-            
-            # Reconstruct the exact architecture used during training
-            model_wrapper = SentimentModel(ModelConfig())
-            self.model = model_wrapper.build()
-            
-            # Load the optimal weights from the checkpoint
-            weights_path = str(_PROJECT_ROOT / "model" / "saved_models" / "checkpoints" / "best_weights.h5")
-            self.model.load_weights(weights_path)
-            
-            log.info("Model architecture and weights loaded successfully.")
-        except Exception as e:
-            log.error(f"Failed to load model: {e}")
-            raise e
-            
-        self._initialized = True
 
-    def predict(self, texts: list[str]) -> list[dict]:
+            # DeBERTa is too large to share GPU VRAM with BERT on a 4GB GPU.
+            # Force it to CPU — system RAM can hold 735MB comfortably.
+            device = "/CPU:0" if model_type == "deberta" else "/GPU:0"
+            log.info(f"Pinning {model_type} to {device}")
+
+            with tf.device(device):
+                if model_type == "bert":
+                    # Use the original partial fine-tuning architecture (no LoRA)
+                    # to match the bert_v1 SavedModel which had PEFT fallback.
+                    # This restores the good-performing original model.
+                    m_cfg = ModelConfig(model_name=tokenizer_name, use_lora=False)
+                    model_wrapper = SentimentModel(m_cfg)
+                    model = model_wrapper.build()
+
+                    saved_model_vars = _PROJECT_ROOT / "model" / "saved_models" / "bert_v1" / "variables" / "variables"
+                    ckpt_path       = _PROJECT_ROOT / "model" / "saved_models" / "checkpoints" / "bert_best_weights.ckpt"
+
+                    if saved_model_vars.with_suffix(".index").exists():
+                        log.info("Loading BERT weights from bert_v1 SavedModel variables (original partial fine-tuning).")
+                        model.load_weights(str(saved_model_vars))
+                    elif ckpt_path.with_suffix(".ckpt.index").exists():
+                        log.info("Loading BERT weights from checkpoint.")
+                        model.load_weights(str(ckpt_path))
+                    else:
+                        log.warning("No BERT weights found.")
+                else:
+                    # DeBERTa: use LoRA architecture with checkpoint
+                    m_cfg = ModelConfig(model_name=tokenizer_name)
+                    model_wrapper = SentimentModel(m_cfg)
+                    model = model_wrapper.build()
+
+                    specific_ckpt = _PROJECT_ROOT / "model" / "saved_models" / "checkpoints" / f"{model_type}_best_weights.ckpt"
+                    specific_h5   = _PROJECT_ROOT / "model" / "saved_models" / "checkpoints" / f"{model_type}_best_weights.h5"
+
+                    weights_path = None
+                    for candidate in [specific_ckpt, specific_h5]:
+                        if candidate.exists():
+                            weights_path = candidate
+                            break
+
+                    if weights_path:
+                        model.load_weights(str(weights_path))
+                    else:
+                        log.warning(f"No trained weights found for {model_type}.")
+
+            self.models[model_type] = model
+            # Track which device this model is pinned to for inference
+            self.model_devices = getattr(self, "model_devices", {})
+            self.model_devices[model_type] = device
+            log.info(f"{model_type} loaded successfully on {device}.")
+        except Exception as e:
+            log.error(f"Failed to load {model_type}: {e}")
+            raise e
+
+    def predict(self, texts: list[str], model_type: str = None) -> list[dict]:
         """
-        Run inference on a batch of texts.
+        Run inference on a batch of texts using the specified model.
         """
+        model_type = model_type or settings.model_type
+        self._load_model(model_type)
+        model = self.models[model_type]
+        tokenizer = self.tokenizers[model_type]
+        
         # 1. Tokenize (exactly as dataset.py did during training)
-        encoded = self.tokenizer(
+        encoded = tokenizer(
             texts,
             max_length=settings.max_sequence_length,
             padding="max_length",
@@ -75,32 +135,37 @@ class SentimentInferenceEngine:
             "token_type_ids": encoded["token_type_ids"].astype(np.int32)
         }
 
-        # 2. Forward Pass
-        # The model outputs independent logits, so we apply sigmoid for multi-label probabilities
-        logits = self.model.predict(input_dict, verbose=0)
-        probabilities = tf.nn.sigmoid(logits).numpy()
+        # 2. Forward Pass — run on whichever device the model was pinned to
+        device = getattr(self, "model_devices", {}).get(model_type, "/GPU:0")
+        with tf.device(device):
+            logits = model.predict(input_dict, batch_size=4, verbose=0)
+        # Use softmax for a proper single-label probability distribution
+        softmax_probs = tf.nn.softmax(logits).numpy()
+        # Also keep sigmoid scores for raw confidence display
+        sigmoid_probs = tf.nn.sigmoid(logits).numpy()
 
         # 3. Decode results
         results = []
-        for probs in probabilities:
+        for sm_probs, sig_probs in zip(softmax_probs, sigmoid_probs):
             prob_dict = {
-                "negative": float(probs[0]),
-                "neutral":  float(probs[1]),
-                "positive": float(probs[2]),
-                "mixed":    0.0 # Will calculate if thresholds met
+                "negative": float(sm_probs[0]),
+                "neutral":  float(sm_probs[1]),
+                "positive": float(sm_probs[2]),
+                "mixed":    0.0
             }
             
-            # User's Multi-Label Threshold Logic
-            if prob_dict["positive"] > 0.4 and prob_dict["negative"] > 0.4:
+            # Mixed: only when softmax gives meaningfully high scores to BOTH
+            # positive and negative (margin < 0.15 and both > 0.35)
+            pos, neg = float(sm_probs[2]), float(sm_probs[0])
+            if pos > 0.35 and neg > 0.35 and abs(pos - neg) < 0.15:
                 label = "mixed"
-                # Confidence is the average of both high signals
-                confidence = (prob_dict["positive"] + prob_dict["negative"]) / 2.0
+                confidence = (pos + neg) / 2.0
                 prob_dict["mixed"] = confidence
             else:
-                # Standard argmax over the 3 core classes
-                pred_id = int(np.argmax(probs))
+                # Standard argmax over softmax distribution
+                pred_id = int(np.argmax(sm_probs))
                 label = ID_TO_LABEL[pred_id]
-                confidence = float(probs[pred_id])
+                confidence = float(sm_probs[pred_id])
             
             results.append({
                 "label": label,
