@@ -10,6 +10,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from backend.api.schemas.request import PredictRequest, BatchPredictRequest
 from backend.api.schemas.response import PredictResponse, BatchPredictResponse, SentimentResult, AspectInsight
 from backend.core.inference import SentimentInferenceEngine, get_engine
+from backend.core.summarizer import get_summarizer
 from backend.core.config import settings
 
 router = APIRouter()
@@ -143,7 +144,15 @@ async def predict_batch(
             )
             
         insights = generate_aspect_insights(responses)
-        return BatchPredictResponse(results=responses, insights=insights)
+
+        total = len(responses)
+        pos_pct = sum(1 for r in responses if r.result.label == "positive") / total * 100
+        neg_pct = sum(1 for r in responses if r.result.label in ("negative", "mixed")) / total * 100
+        summary = get_summarizer().summarize(
+            total, pos_pct, neg_pct,
+            [i.model_dump() for i in insights]
+        )
+        return BatchPredictResponse(results=responses, insights=insights, summary=summary)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Batch inference failed: {str(e)}")
 
@@ -186,7 +195,15 @@ async def predict_file(
             )
             
         insights = generate_aspect_insights(responses)
-        return BatchPredictResponse(results=responses, insights=insights)
+
+        total = len(responses)
+        pos_pct = sum(1 for r in responses if r.result.label == "positive") / total * 100
+        neg_pct = sum(1 for r in responses if r.result.label in ("negative", "mixed")) / total * 100
+        summary = get_summarizer().summarize(
+            total, pos_pct, neg_pct,
+            [i.model_dump() for i in insights]
+        )
+        return BatchPredictResponse(results=responses, insights=insights, summary=summary)
     except Exception as e:
         if isinstance(e, HTTPException):
             raise e

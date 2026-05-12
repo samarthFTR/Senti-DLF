@@ -31,6 +31,7 @@ class BatchPredictResponse(BaseModel):
     """
     results: List[PredictResponse]
     insights: Optional[List[AspectInsight]] = []
+    summary: Optional[str] = None
 
 class HealthResponse(BaseModel):
     """

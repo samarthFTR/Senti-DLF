@@ -43,6 +43,7 @@ function App() {
   const [result, setResult] = useState<SentimentResult | null>(null);
   const [batchResults, setBatchResults] = useState<ApiResponse[] | null>(null);
   const [batchInsights, setBatchInsights] = useState<AspectInsight[] | null>(null);
+  const [batchSummary, setBatchSummary] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const stats = useMemo(() => {
@@ -66,6 +67,7 @@ function App() {
     setResult(null);
     setBatchResults(null);
     setBatchInsights(null);
+    setBatchSummary(null);
 
     try {
       if (activeTab === 'text') {
@@ -99,6 +101,7 @@ function App() {
         const data = await response.json();
         setBatchResults(data.results);
         setBatchInsights(data.insights);
+        setBatchSummary(data.summary || null);
       }
     } catch (err: any) {
       setError(err.message || 'An unknown error occurred.');
@@ -318,6 +321,21 @@ function App() {
                 <span className="stat-value text-negative">{stats.negPercent}%</span>
               </div>
             </div>
+          )}
+
+          {/* Summary Widget */}
+          {batchSummary && (
+            <motion.div
+              className="widget summary-widget"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <div className="widget-header">
+                <h3><Sparkles size={16} style={{ display: 'inline', marginRight: '8px', color: '#8E2DE2' }} />AI Summary</h3>
+              </div>
+              <p className="summary-text">{batchSummary}</p>
+            </motion.div>
           )}
 
           {/* Insights Widget */}

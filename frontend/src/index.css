@@ -454,3 +454,20 @@ body {
 
 @keyframes spin { 100% { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
+
+/* AI Summary Widget */
+.summary-widget {
+  border: 1px solid rgba(142, 45, 226, 0.25);
+  background: linear-gradient(
+    135deg,
+    rgba(142, 45, 226, 0.06) 0%,
+    rgba(74, 0, 224, 0.04) 100%
+  );
+}
+
+.summary-text {
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--text-main);
+  opacity: 0.92;
+}
