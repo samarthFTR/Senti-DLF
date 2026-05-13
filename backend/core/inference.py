@@ -81,8 +81,9 @@ class SentimentInferenceEngine:
                     else:
                         log.warning("No BERT weights found.")
                 else:
-                    # DeBERTa: use LoRA architecture with checkpoint
-                    m_cfg = ModelConfig(model_name=tokenizer_name)
+                    # DeBERTa: partial fine-tuning architecture (top 3 layers),
+                    # matching exactly what trainer.py produces with use_lora=False.
+                    m_cfg = ModelConfig(model_name=tokenizer_name, use_lora=False)
                     model_wrapper = SentimentModel(m_cfg)
                     model = model_wrapper.build()
 
@@ -90,20 +91,32 @@ class SentimentInferenceEngine:
                     specific_h5   = _PROJECT_ROOT / "model" / "saved_models" / "checkpoints" / f"{model_type}_best_weights.h5"
 
                     weights_path = None
-                    for candidate in [specific_ckpt, specific_h5]:
-                        if candidate.exists():
-                            weights_path = candidate
-                            break
+                    # TF checkpoints don't create a bare .ckpt file — check for
+                    # the .ckpt.index sidecar to confirm the checkpoint exists.
+                    ckpt_index = _PROJECT_ROOT / "model" / "saved_models" / "checkpoints" / f"{model_type}_best_weights.ckpt.index"
+                    h5_path    = _PROJECT_ROOT / "model" / "saved_models" / "checkpoints" / f"{model_type}_best_weights.h5"
+
+                    if ckpt_index.exists():
+                        weights_path = ckpt_index.parent / ckpt_index.stem  # strips .index → .ckpt
+                    elif h5_path.exists():
+                        weights_path = h5_path
 
                     if weights_path:
+                        log.info(f"Loading DeBERTa fine-tuned weights from {weights_path.name}.")
                         model.load_weights(str(weights_path))
                     else:
-                        log.warning(f"No trained weights found for {model_type}.")
+                        log.warning(
+                            "No fine-tuned DeBERTa weights found — using pretrained base model. "
+                            "Run: python -m model.src.trainer --model deberta"
+                        )
 
             self.models[model_type] = model
             # Track which device this model is pinned to for inference
             self.model_devices = getattr(self, "model_devices", {})
             self.model_devices[model_type] = device
+            # Track whether this model has fine-tuned weights loaded
+            self.model_ready = getattr(self, "model_ready", {})
+            self.model_ready[model_type] = bool(weights_path) if model_type != "bert" else True
             log.info(f"{model_type} loaded successfully on {device}.")
         except Exception as e:
             log.error(f"Failed to load {model_type}: {e}")
@@ -115,6 +128,15 @@ class SentimentInferenceEngine:
         """
         model_type = model_type or settings.model_type
         self._load_model(model_type)
+
+        # Block inference if the model was loaded without fine-tuned weights
+        model_ready = getattr(self, "model_ready", {})
+        if not model_ready.get(model_type, True):
+            raise RuntimeError(
+                f"'{model_type}' model has no fine-tuned weights yet. "
+                f"Train it first: python -m model.src.trainer --model {model_type}"
+            )
+
         model = self.models[model_type]
         tokenizer = self.tokenizers[model_type]
         
