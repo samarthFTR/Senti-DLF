@@ -184,17 +184,18 @@ if __name__ == "__main__":
     
     if args.model == "deberta":
         d_cfg.tokenizer_name = "microsoft/deberta-v3-base"
-        d_cfg.batch_size = 4  # Reduce batch size significantly for DeBERTa to prevent OOM
+        d_cfg.batch_size = 4  # DeBERTa needs small batches on 4GB VRAM
         m_cfg = ModelConfig(
             model_name="microsoft/deberta-v3-base",
-            learning_rate=2e-5,  # Lower learning rate for DeBERTa
-            label_smoothing=0.1
+            learning_rate=2e-5,
+            label_smoothing=0.1,
+            use_lora=False,       # DeBERTa uses partial fine-tuning (top 3 layers)
         )
         t_cfg = TrainerConfig(
             epochs=3,
             final_model_dir=str(Path(d_cfg.processed_dir).parent / "saved_models" / "deberta_v1")
         )
-        log.info("Configured for DeBERTa-v3-base training.")
+        log.info("Configured for DeBERTa-v3-base training (partial fine-tuning, top 3 layers).")
     else:
         d_cfg.tokenizer_name = "bert-base-uncased"
         d_cfg.batch_size = 8  # Real LoRA (all 12 layers) needs smaller batches on 4GB VRAM

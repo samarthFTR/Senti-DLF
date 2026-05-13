@@ -226,11 +226,34 @@ class SentimentModel:
         if self.config.use_lora:
             base_model = self._apply_lora(base_model)
         else:
-            log.warning(
-                "LoRA disabled — all %d base parameters will be trained.",
-                base_model.num_parameters(),
+            # Partial fine-tuning: freeze embeddings + bottom 9 transformer
+            # layers, train only the top 3 layers + classification head.
+            # This keeps VRAM usage manageable on 4GB GPUs while still
+            # adapting the model effectively to the task.
+            log.info("LoRA disabled — applying partial fine-tuning (top 3 layers).")
+            base_model.trainable = False   # freeze everything first
+
+            # Detect encoder attribute (bert vs deberta)
+            if hasattr(base_model, 'bert'):
+                encoder_layers = base_model.bert.encoder.layer
+            elif hasattr(base_model, 'deberta'):
+                encoder_layers = base_model.deberta.encoder.layer
+            else:
+                encoder_layers = []
+                log.warning("Unknown model structure — base remains fully frozen.")
+
+            total = len(encoder_layers)
+            freeze_up_to = max(0, total - 3)   # unfreeze last 3 layers
+            for i, layer in enumerate(encoder_layers):
+                layer.trainable = i >= freeze_up_to
+
+            trainable_count = sum(
+                1 for l in encoder_layers if l.trainable
             )
-            base_model.trainable = True
+            log.info(
+                "Partial fine-tuning: %d/%d transformer layers unfrozen.",
+                trainable_count, total
+            )
 
         self._model = self._build_keras_graph(base_model)
         self._compile()
