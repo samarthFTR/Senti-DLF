@@ -148,6 +148,11 @@ class ModelConfig:
     weight_decay: float   = 1e-2
     label_smoothing: float= 0.1
 
+    # -- Partial fine-tuning (when use_lora=False) -----------------------------
+    # Number of transformer layers to unfreeze from the top of the encoder.
+    # Remaining layers (embeddings + bottom N-num_unfreeze_layers) stay frozen.
+    num_unfreeze_layers: int = 3
+
 
 # ---------------------------------------------------------------------------
 # Main Model class

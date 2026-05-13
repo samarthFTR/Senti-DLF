@@ -141,8 +141,13 @@ class ModelTrainer:
         ]
 
         # 4. Train
-        # Weighted loss: Keep neutral class strong (index 1 is neutral)
-        class_weight = {0: 1.0, 1: 2.0, 2: 1.0}
+        # Weighted loss: strongly upweight negative to counter class imbalance.
+        # negative(0) gets 3x, neutral(1) gets 1x, positive(2) gets 1x.
+        # Previous run had neutral double-weighted which starved the negative class.
+        if "deberta" in self.config.final_model_dir:
+            class_weight = {0: 3.0, 1: 1.0, 2: 1.0}
+        else:
+            class_weight = {0: 1.0, 1: 2.0, 2: 1.0}  # BERT: keep neutral weighted
 
         log.info("Starting model.fit() for %d epochs...", self.config.epochs)
         history = self.model.fit(
@@ -188,14 +193,15 @@ if __name__ == "__main__":
         m_cfg = ModelConfig(
             model_name="microsoft/deberta-v3-base",
             learning_rate=2e-5,
-            label_smoothing=0.1,
-            use_lora=False,       # DeBERTa uses partial fine-tuning (top 3 layers)
+            label_smoothing=0.05,     # reduce smoothing so negative signal is sharper
+            use_lora=False,           # partial fine-tuning (top 6 layers)
+            num_unfreeze_layers=6,    # was 3 — more capacity for 3-class discrimination
         )
         t_cfg = TrainerConfig(
-            epochs=3,
-            final_model_dir=str(Path(d_cfg.processed_dir).parent / "saved_models" / "deberta_v1")
+            epochs=4,                 # one extra epoch to converge with more unfrozen layers
+            final_model_dir=str(Path(d_cfg.processed_dir).parent / "saved_models" / "deberta_v2")
         )
-        log.info("Configured for DeBERTa-v3-base training (partial fine-tuning, top 3 layers).")
+        log.info("Configured for DeBERTa-v3-base retraining (partial fine-tuning, top 6 layers).")
     else:
         d_cfg.tokenizer_name = "bert-base-uncased"
         d_cfg.batch_size = 8  # Real LoRA (all 12 layers) needs smaller batches on 4GB VRAM
