@@ -15,8 +15,8 @@ model/data/processed/*
 # 2. Model Artifacts & Checkpoints (CRITICAL)
 # Trained weights, logs, and adapter matrices belong in HuggingFace Hub / MLflow.
 # ------------------------------------------------------------------------------
-model/saved_models/*
-!model/saved_models/.gitkeep
+model/data/saved_models/*
+!model/data/saved_models/.gitkeep
 
 # ------------------------------------------------------------------------------
 # 3. Environment & Secrets
@@ -98,12 +98,15 @@ scratch/
 # 9. TensorFlow / Keras Artifacts
 # ------------------------------------------------------------------------------
 # TensorBoard logs inside saved_models
-model/saved_models/logs/
+model/data/saved_models/logs/
 # TF checkpoint shard files (large binary)
 *.ckpt.data-*
 *.ckpt.index
 # Keras legacy H5 weight files (stored in checkpoints, not source)
 *.h5
+# TF SavedModel variable shards (large binary blobs — store on HF Hub / DVC)
+*.data-00000-of-00001
+*.data-*-of-*
 # TF SavedModel protocol buffers (tracked via DVC / HF Hub instead)
 saved_model.pb
 keras_metadata.pb
